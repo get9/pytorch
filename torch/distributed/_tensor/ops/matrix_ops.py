@@ -188,6 +188,18 @@ def scaled_dot_product_attention_strategy(
         ]
         single_mesh_dim_strategies.append(num_heads_dim_sharding)
 
+        # third we can accept sharding KV and replicating Q which is used for context parallelism
+        single_mesh_dim_strategies.append(
+            [
+                Replicate(),
+                Replicate(),
+                Replicate(),
+                Replicate(),
+                Shard(2),  # shard on sequence
+                Shard(2),  # shard on sequence
+            ]
+        )
+
         all_mesh_dim_strategies.append(single_mesh_dim_strategies)
 
     strategy_combs = itertools.product(*all_mesh_dim_strategies)
@@ -314,3 +326,19 @@ def scaled_dot_product_attention_backward_strategy(
             all_strategies.append(strat)
 
     return OpStrategy(all_strategies)
+
+
+@register_op_strategy(aten.constant_pad_nd.default)
+def constant_pad_nd_strategy(mesh: DeviceMesh, op_schema: OpSchema) -> OpStrategy:
+    return OpStrategy(
+        [
+            PlacementStrategy(
+                output_specs=DTensorSpec(mesh, (Replicate(),)),
+                input_specs=(
+                    DTensorSpec(mesh, (Replicate(),)),
+                    DTensorSpec(mesh, (Replicate(),)),
+                ),
+                redistribute_cost=[[1]],
+            )
+        ]
+    )
