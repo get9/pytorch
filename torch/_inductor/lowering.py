@@ -53,6 +53,7 @@ from .ir import (
 from .utils import (
     ceildiv,
     decode_device,
+    get_dtype_size,
     is_dynamic,
     is_pointwise_use,
     pad_listlike,
@@ -5872,6 +5873,21 @@ def resize(x, size, *, memory_format=None):
         device=device, dtype=dtype, inner_fn=inner_fn, ranges=list(size)
     )
     return out
+
+
+@register_lowering(aten.resize_, type_promotion_kind=None)
+def resize_(x, size, *, memory_format=None):
+    val = resize(x, size, memory_format=memory_format)
+    if isinstance(x, TensorBox):
+        x_data = x.data  # type: ignore[attr-defined]
+    else:
+        x_data = x
+    assert isinstance(val, ir.StorageBox)
+    if x_data.is_input_buffer() or isinstance(x_data.data, ir.NopKernel):  # type: ignore[attr-defined]
+        ir.ResizeStorageBytes(x, val.get_numel() * get_dtype_size(x.get_dtype()))
+    val.realize()
+    x_data.data = val.data  # type: ignore[attr-defined]
+    return x
 
 
 from torch._higher_order_ops.auto_functionalize import auto_functionalized
