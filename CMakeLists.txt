@@ -266,6 +266,7 @@ option(USE_OBSERVERS "Use observers module." OFF)
 option(USE_OPENCL "Use OpenCL" OFF)
 option(USE_OPENCV "Use OpenCV" OFF)
 option(USE_OPENMP "Use OpenMP for parallel code" ON)
+option(USE_OPENTELEMETRY "Use Opentelemetry" ON)
 option(USE_PRECOMPILED_HEADERS "Use pre-compiled headers to accelerate build." OFF)
 
 option(USE_PROF "Use profiling" OFF)
@@ -1276,4 +1277,9 @@ if(BUILD_BUNDLE_PTXAS AND USE_CUDA)
      file(COPY "${CUDAToolkit_BIN_DIR}/ptxas" DESTINATION "${PROJECT_BINARY_DIR}")
    endif()
    install(PROGRAMS "${PROJECT_BINARY_DIR}/ptxas" DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+
+# Opentelemetry Options
+if (USE_OPENTELEMETRY)
+   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/opentelemetry-cpp/api/include)
 endif()
