@@ -86,18 +86,47 @@ def aot_dispatch_base_graph(
         fw_only=flat_fn,
     )
 
+    registered_buffers = {}
+    def _hook(mod, name, buffer):
+        print("HOOK", mod, name)
+        func_to_fake = buffer.from_functional()
+        proxy_mode = None
+        for mode in torch.utils._python_dispatch._get_current_dispatch_mode_stack():
+            if isinstance(mode, torch.fx.experimental.proxy_tensor.ProxyTorchDispatchMode):
+                proxy_mode = mode
+        assert proxy_mode is not None
+        fake_to_proxy = torch.fx.experimental.proxy_tensor.get_proxy_slot(func_to_fake, proxy_mode.tracer).proxy.node
+        registered_buffers[name] = fake_to_proxy.name
+        return buffer
+    handle = torch.nn.modules.module.register_module_buffer_registration_hook(_hook)
+
     fw_module = _create_graph(
         fn_to_trace,
         updated_flat_args_subclasses_desugared,
         aot_config=aot_config,
     )
 
+    fw_module._registered_buffers = registered_buffers
+    print("--------------------")
+    add_nodes = []
+    output_node = None
+    output_node = list(fw_module.graph.nodes)[-1]
+    for name in registered_buffers.values():
+        for node in fw_module.graph.nodes:
+            if node.name == name:
+                add_nodes.append(node)
+                node.users[output_node] = None
+    output_node.args = ((*add_nodes, *output_node.args[0]),)
+
+    handle.remove()
     # As long as we opted to remove input mutations, then
     # there should be *NO* mutating ops in the graph at this point.
     copy_count = assert_functional_graph(fw_module.graph)
 
+    print("DCE before", fw_module.graph)
     fw_module.graph.eliminate_dead_code()
     fw_module.recompile()
+    print("DCE after", fw_module.graph)
 
     copy_count2 = assert_functional_graph(fw_module.graph)
     propagate_input_mutation_stacktraces(fw_module.graph)

@@ -337,6 +337,36 @@ def _make_module_call_graph(
     return ret
 
 
+@contextmanager
+def detect_attribute_assignment(mod: torch.nn.Module):
+    def get_attributes():
+        from torch.distributed.nn.api.remote_module import _REMOTE_MODULE_ATTRIBUTES_IGNORE_FOR_PICKLING
+        return {k: v for k, v in mod.__dict__.items() if k not in _REMOTE_MODULE_ATTRIBUTES_IGNORE_FOR_PICKLING}
+
+    snapshot = pytree.tree_map(lambda x: x, get_attributes())
+
+    try:
+        yield
+    finally:
+        assigned_attributes = []
+        def _f(kp, t, _t):
+            if isinstance(t, torch.Tensor) and not(_t is t):
+                attr, *rest = kp
+                assigned_attributes.append(f"self.{attr.key}{torch.utils._pytree.keystr(rest)}")
+        pytree.tree_map_with_path(_f, snapshot, get_attributes())
+
+        if assigned_attributes:
+            if len(assigned_attributes) > 1:
+                msg = f"attributes {', '.join(assigned_attributes)} were"
+            else:
+                msg = f"attribute {assigned_attributes[0]} was"
+            raise ValueError(
+                f"The {msg} assigned during export. "
+                "Such attributes must be registered as buffers using the `register_buffer` API "
+                "(https://pytorch.org/docs/stable/generated/torch.nn.Module.html#torch.nn.Module.register_buffer)."
+            )
+
+
 def _export_to_torch_ir(
     f: Callable,
     args: Tuple[Any, ...],
@@ -811,7 +841,8 @@ def _export(
                                     *args, **kwargs
                                 )
                         else:
-                            tree_out = self._export_root(*args, **kwargs)
+                            with detect_attribute_assignment(self._export_root):
+                                tree_out = self._export_root(*args, **kwargs)
                         flat_outs, out_spec = pytree.tree_flatten(tree_out)
                         return tuple(flat_outs)
 
@@ -825,6 +856,8 @@ def _export(
                     wrapped_mod, new_preserved_call_signatures, module_call_specs
                 ):
                     gm, sig = aot_export(wrapped_mod, args, kwargs=kwargs, **flags)
+                    for buf, name in gm._registered_buffers.items():
+                        sig.buffers_to_mutate[name] = f"_export_root.{buf}"
 
                 sig.parameters = pytree.tree_map(strip_root, sig.parameters)
                 sig.buffers = pytree.tree_map(strip_root, sig.buffers)
