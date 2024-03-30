@@ -266,7 +266,7 @@ option(USE_OBSERVERS "Use observers module." OFF)
 option(USE_OPENCL "Use OpenCL" OFF)
 option(USE_OPENCV "Use OpenCV" OFF)
 option(USE_OPENMP "Use OpenMP for parallel code" ON)
-option(USE_OPENTELEMETRY "Use Opentelemetry" ON)
+option(USE_OPENTELEMETRY "Use OpenTelemetry" ON)
 option(USE_PRECOMPILED_HEADERS "Use pre-compiled headers to accelerate build." OFF)
 
 option(USE_PROF "Use profiling" OFF)

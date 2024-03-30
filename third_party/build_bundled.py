@@ -102,6 +102,21 @@ def identify_license(f, exception=''):
         elif 'BoostSoftwareLicense-Version1.0' in txt:
             # Hmm, do we need to check the text?
             return 'BSL-1.0'
+        elif 'gettimeofday.c' in txt:
+            # Used in opentelemetry-cpp/tools/vcpkg/ports/gettimeofday
+            return 'gettimeofday.c'
+        elif 'libhungarian' in txt:
+            # Used in opentelemetry-cpp/tools/vcpkg/ports/hungarian
+            return 'libhungarian'
+        elif 'PDCurses' in txt:
+            # Used in opentelemetry-cpp/tools/vcpkg/ports/pdcurses
+            return 'PDCurses'
+        elif 'Copyright1999UniversityofNorthCarolina' in txt:
+            # Used in opentelemtry-cpp/tools/vcpkg/ports/pqp
+            return 'pqp'
+        elif 'sigslot' in txt:
+            # Used in opentelemtry-cpp/tools/vcpkg/ports/sigslot
+            return 'sigslot'
         elif squeeze("Clarified Artistic License") in txt:
             return 'Clarified Artistic License'
         elif all([squeeze(m) in txt.lower() for m in bsd3_txt]):
