@@ -22,7 +22,11 @@ from torch.distributed.tensor.parallel import (
     RowwiseParallel,
 )
 from torch.testing._internal.common_cuda import TEST_CUDA
-from torch.testing._internal.common_fsdp import FSDPTestMultiThread, MLP
+from torch.testing._internal.common_fsdp import (
+    FSDPTestMultiThread,
+    MLP,
+    test_compiled_fsdp,
+)
 from torch.testing._internal.common_utils import run_tests
 
 
@@ -458,6 +462,7 @@ class TestFullyShardMetaDeviceInit(FSDPTestMultiThread):
         return 4
 
     @unittest.skipIf(not TEST_CUDA, "no cuda")
+    @test_compiled_fsdp()
     def test_meta_device_1d_init(self):
         default_pg = torch.distributed.distributed_c10d._get_default_group()
         mesh = init_device_mesh("cuda", mesh_shape=(default_pg.size(),))
@@ -534,6 +539,7 @@ class TestFullyShardMetaDeviceInit(FSDPTestMultiThread):
         optim.step()
 
     @unittest.skipIf(not TEST_CUDA, "no cuda")
+    @test_compiled_fsdp()
     def test_invalid_meta_device_init(self):
         default_pg = torch.distributed.distributed_c10d._get_default_group()
         mesh = init_device_mesh("cuda", mesh_shape=(default_pg.size(),))

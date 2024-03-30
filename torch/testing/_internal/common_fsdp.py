@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from contextlib import nullcontext
 from copy import deepcopy
 from enum import auto, Enum
-from functools import partial, wraps
+from functools import wraps
 from typing import Any, Callable, Dict, no_type_check, Optional, Tuple, Type, Union
 from unittest import mock
 
@@ -992,6 +992,12 @@ class FSDPTestMultiThread(MultiThreadedTestCase):
     def run_subtests(self, *args, **kwargs):
         return run_subtests(self, *args, **kwargs)
 
+    def perThreadSetUp(self):
+        torch._dynamo.reset()
+
+    def perThreadTearDown(self):
+        torch._dynamo.reset()
+
 
 class FSDPTest(MultiProcessTestCase):
     def setUp(self):
@@ -1059,7 +1065,9 @@ class FSDPTest(MultiProcessTestCase):
         # immediately exiting due to a skip doesn't cause flakiness.
         dist.barrier()
 
+        torch._dynamo.reset()
         self.run_test(test_name, pipe)
+        torch._dynamo.reset()
 
         dist.barrier()
 
@@ -1324,40 +1332,35 @@ def test_compiled_fsdp(compile_compute_on_module: Optional[type] = None):
         if compile_compute_on_module is None or isinstance(
             args[0], compile_compute_on_module
         ):
+            torch.distributed._composable.fsdp.fully_shard(*args, **kwargs)  # type: ignore[operator]
             args[0].compile()
-        return torch.distributed._composable.fsdp.fully_shard(*args, **kwargs)  # type: ignore[operator]
 
-    class FullyShardPatch(Enum):
-        # apply ``partial`` in order to use ``Enum.value``
-        EAGER = partial(torch.distributed._composable.fsdp.fully_shard)  # type: ignore[var-annotated, arg-type]
-        COMPILED_COMPUTE = partial(fully_shard_with_compiled_compute)  # type: ignore[arg-type]
+    class FullyShardMode(Enum):
+        EAGER = auto()
+        COMPILED_COMPUTE = auto()
         # add FULL for tracing FSDP
 
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             original_fully_shard = torch.distributed._composable.fsdp.fully_shard
-            for fully_shard_patch in FullyShardPatch:
-                if fully_shard_patch != FullyShardPatch.EAGER and not has_triton():
+            for mode in FullyShardMode:
+                if mode != FullyShardMode.EAGER and not has_triton():
                     warnings.warn("Inductor on GPU needs Triton and recent GPU arch")
                     continue
-                imported_fully_shard = (
-                    f"{func.__module__}.{original_fully_shard.__name__}"
-                )
-                with mock.patch(
-                    imported_fully_shard,
-                    fully_shard_patch.value,
-                ):
-                    func(*args, **kwargs)
-                    torch.distributed.barrier()
-                # mock.patch.__exit__ does not work with multi-thread
-                # thread 1 set {func.__module__}.fully_shard
-                # thread 2 read {func.__module__}.fully_shard and thought it is original
-                # hence we manually reset them after __exit__
-                import_path, _ = mock._get_target(imported_fully_shard)  # type: ignore[attr-defined]
-                setattr(
-                    import_path(), original_fully_shard.__name__, original_fully_shard
-                )
+
+                if mode == FullyShardMode.EAGER:
+                    fully_shard_patch = original_fully_shard
+                else:
+                    fully_shard_patch = fully_shard_with_compiled_compute
+
+                # fully_shard is imported as a global
+                # through `from ... import fully_shard`
+                func.__globals__[original_fully_shard.__name__] = fully_shard_patch
+                func(*args, **kwargs)
+                # other threads use patched func before this thread restores
+                torch.distributed.barrier()
+                func.__globals__[original_fully_shard.__name__] = original_fully_shard
 
         return wrapper
 
