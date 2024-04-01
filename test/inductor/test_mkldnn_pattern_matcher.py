@@ -1637,8 +1637,12 @@ class TestPatternMatcher(TestPatternMatcherBase):
                     counters["inductor"]["qlinear_binary_matcher_count"], 2
                 )
                 # Two linear-binary patterns are matched
-                # matched patter1 = [qlinear, add, (convert dtype), (relu), (convert dtype), [quant patten]]
-                # matched patter2 = [qlinear, add, (convert dtype), (relu)]
+                # For static quantization
+                # - matched pattern1 = [qlinear, add, (convert dtype), (relu), (convert dtype), [quant patten]]
+                # - matched pattern2 = [qlinear, add, (convert dtype), (relu)]
+                # For dynamic quantization
+                # - matched pattern1 = [qlinear, add, (relu)]
+                # - matched pattern2 = [qlinear, add, (convert dtype), (relu)]
                 # len(quant pattern) = 6
                 # If add_fn is x.add_(y), x is bf16 and y is fp32, there is a to_bf16 node after binary
                 # - int8_mixed_bf16 with relu
@@ -1654,13 +1658,23 @@ class TestPatternMatcher(TestPatternMatcherBase):
                     to_bf16_after_binary = 2 * (add_fn == add_fn_list[2] and fq_x2)
                 else:
                     convert_before_quant = int8_mixed_bf16 and not fq_x2
-                    to_bf16_after_binary = add_fn == add_fn_list[2] and fq_x2
+                    to_bf16_after_binary = (add_fn == add_fn_list[2] and fq_x2) * (
+                        2 if is_dynamic else 1
+                    )
                 self.assertEqual(
                     counters["inductor"]["qlinear_binary_matcher_nodes"],
-                    10 + 2 * use_relu + to_bf16_after_binary + convert_before_quant,
+                    4 + 2 * use_relu + to_bf16_after_binary
+                    if is_dynamic
+                    else 10
+                    + 2 * use_relu
+                    + to_bf16_after_binary
+                    + convert_before_quant,
                 )
 
-            for is_qat in [False, True]:
+            is_qat_list = [False, True]
+            is_dynamic_list = [False, True]
+            cases = itertools.product(is_qat_list, is_dynamic_list)
+            for is_qat, is_dynamic in cases:
                 self._test_common(
                     mod,
                     (v,),
@@ -1668,6 +1682,7 @@ class TestPatternMatcher(TestPatternMatcherBase):
                     check_autocast=torch.bfloat16 if int8_mixed_bf16 else torch.float,
                     matcher_check_fn=matcher_check_fn,
                     is_qat=is_qat,
+                    is_dynamic=is_dynamic,
                 )
 
     @skipIfNoDynamoSupport

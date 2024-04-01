@@ -433,6 +433,8 @@ class X86InductorQuantizer(Quantizer):
         self, model: torch.fx.GraphModule
     ) -> torch.fx.GraphModule:
         config = self.global_config
+        self._annotate_linear_binary_unary(model, config)
+        self._annotate_linear_unary(model, config)
         self._annotate_linear(model, config)
         return model
 
