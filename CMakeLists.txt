@@ -1280,6 +1280,6 @@ if(BUILD_BUNDLE_PTXAS AND USE_CUDA)
 endif()
 
 # Opentelemetry Options
-if (USE_OPENTELEMETRY)
+if(USE_OPENTELEMETRY)
    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/opentelemetry-cpp/api/include)
 endif()
