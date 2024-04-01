@@ -310,6 +310,19 @@ class AOTInductorTestsTemplate:
         self.assertEqual(counters["inductor"]["scmerge_cat_removed"], 1)
         self.assertEqual(counters["inductor"]["scmerge_split_sections_removed"], 1)
 
+    def test_amp_fallback_random(self):
+        if self.device == "cuda":
+            raise unittest.SkipTest("The test fails on CUDA with or without this PR")
+        
+        def fn(x):
+            return x + x
+
+        example_inputs = (torch.randn(10, 10, device=self.device),)
+
+        with config.patch({"fallback_random": True}):
+            with torch.cpu.amp.autocast():
+                self.check_model(fn, example_inputs)
+
     def test_missing_output(self):
         class Model(torch.nn.Module):
             def __init__(self):
