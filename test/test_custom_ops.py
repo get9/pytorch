@@ -11,6 +11,7 @@ import sys
 import typing
 
 import torch._custom_ops as custom_ops
+import torch._library.utils as utils
 
 import torch.testing._internal.optests as optests
 import torch.utils.cpp_extension
@@ -721,6 +722,23 @@ class TestCustomOp(CustomOpTestCaseBase):
         raise NotImplementedError(
             f"testrunner cannot generate instanstance of type {typ}"
         )
+
+    def test_mangle_demangle(self):
+        examples = [
+            "__main__",
+            "__main__.foo",
+            "foo.bar.baz",
+            "X.Z.XZ.ZX.ZZ",
+            "Z0ZZ1ZZZ2",
+            "torch.testing._internal.custom_op_db.fn0",
+            "torch.testing._internal.custom_op_db.get_fn1.<locals>.fn1",
+        ]
+
+        for value in examples:
+            mangled = utils.mangle(value)
+            self.assertTrue(mangled.isidentifier())
+            demangled = utils.demangle(mangled)
+            self.assertEqual(demangled, value)
 
     def test_supported_return_types_single_return(self):
         for typ in torch._custom_op.impl.SUPPORTED_RETURN_TYPES:

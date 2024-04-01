@@ -1,5 +1,6 @@
 import dataclasses
 import inspect
+import re
 import sys
 from typing import Any, Callable, Tuple
 
@@ -171,3 +172,47 @@ def zip_schema(schema, args, kwargs):
             continue
         yield info, args[i]
     return
+
+
+def mangle(value: str) -> str:
+    """Mangles a string into a usable Python identifier.
+
+    https://docs.python.org/3/reference/lexical_analysis.html#identifiers
+
+    The string may consist of letters, numbers, underscores and [.<>]
+
+    We optimize for readability in the general case (strings with letters,
+    numbers, periods, and underscore).
+
+    The mangling scheme is:
+    - . -> X
+    - Z -> ZZ
+    - X -> ZX
+    - < -> Z0
+    - > -> Z1
+
+    Examples:
+    - foo.bar.baz -> fooXbarXbaz
+    - foo_bar.baz -> foo_barXbaz
+    - X.Z -> ZXXZZ
+    - ZQ.ZQ -> ZZQXZZQ
+    """
+    assert re.match(r"^[A-z0-9.<>_]+$", value), "invalid value"
+    value = value.replace("Z", "ZZ")
+    value = value.replace("X", "ZX")
+    value = value.replace(".", "X")
+    value = value.replace("<", "Z0")
+    value = value.replace(">", "Z1")
+    return value
+
+
+def demangle(value: str) -> str:
+    """The inverse operation of mangle"""
+    value = value.replace("ZZ", "!")
+    value = value.replace("ZX", "?")
+    value = value.replace("Z0", "<")
+    value = value.replace("Z1", ">")
+    value = value.replace("X", ".")
+    value = value.replace("?", "X")
+    value = value.replace("!", "Z")
+    return value
