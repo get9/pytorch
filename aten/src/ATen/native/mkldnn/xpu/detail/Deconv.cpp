@@ -16,7 +16,7 @@ static inline dnnl::memory::dims deconv_compatible_dilation(IntArrayRef& dilatio
   return ret;
 }
 
-static inline dnnl::memory::dims deconv_dst_tz(
+dnnl::memory::dims deconv_dst_size(
     IntArrayRef src_size,
     IntArrayRef wgh_size,
     IntArrayRef padding,
